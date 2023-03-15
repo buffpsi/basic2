@@ -1,19 +1,6 @@
 package com.ll.basic1.boundedContext.member.controller;
 
 import com.ll.basic1.base.rsData.RsData;
-import com.ll.basic1.boundedContext.member.service.MemberService;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-
-import java.io.IOException;
-import java.util.Arrays;
-
-import com.ll.basic1.base.rsData.RsData;
 import com.ll.basic1.boundedContext.member.entity.Member;
 import com.ll.basic1.boundedContext.member.service.MemberService;
 import jakarta.servlet.http.Cookie;
@@ -61,14 +48,8 @@ public class MemberController {
     @GetMapping("/member/logout")
     @ResponseBody
     public RsData logout(HttpServletRequest req, HttpServletResponse resp) {
-        if (req.getCookies() != null) {
-            Arrays.stream(req.getCookies())
-                    .filter(cookie -> cookie.getName().equals("loginedMemberId"))
-                    .forEach(cookie -> {
-                        cookie.setMaxAge(0);
-                        resp.addCookie(cookie);
-                    });
-        }
+        Rq rq = new Rq(req, resp);
+        rq.removeCookie("loginedMemberId");
 
         return RsData.of("S-1", "로그아웃 되었습니다.");
     }
@@ -76,24 +57,51 @@ public class MemberController {
     @GetMapping("/member/me")
     @ResponseBody
     public RsData showMe(HttpServletRequest req) {
-        long loginedMemberId = 0;
+        Rq rq = new Rq(req);
+        long loginedMemberId = rq.getLoginedMemberId();
+        if (loginedMemberId == 0) {
+            return RsData.of("F-5", "로그인 후 이용해주세요.");
+        }
+        Member member = memberService.findById(loginedMemberId);
+        return RsData.of("S-1", "당신의 username은"+member.getUsername()+"입니다.");
+    }
+}
+
+class Rq {
+    private HttpServletRequest req;
+
+    public Rq(HttpServletRequest req) {
+        this.req = req;
+    }
+
+    private HttpServletResponse resp;
+
+    public Rq(HttpServletRequest req, HttpServletResponse resp) {
+        this.req = req;
+        this.resp = resp;
+    }
+
+    public void removeCookie(String name) {
+        if (req.getCookies() != null) {
+            Arrays.stream(req.getCookies())
+                    .filter(cookie -> cookie.getName().equals(name))
+                    .forEach(cookie -> {
+                        cookie.setMaxAge(0);
+                        resp.addCookie(cookie);
+                    });
+        }
+    }
+
+    public long getLoginedMemberId() {
 
         if (req.getCookies() != null) {
-            loginedMemberId = Arrays.stream(req.getCookies())
+            return Arrays.stream(req.getCookies())
                     .filter(cookie -> cookie.getName().equals("loginedMemberId"))
                     .map(Cookie::getValue)
-                    .mapToInt(Integer::parseInt)
+                    .mapToLong(Long::parseLong)
                     .findFirst()
                     .orElse(0);
         }
-
-        boolean isLogined = loginedMemberId > 0;
-
-        if (isLogined == false)
-            return RsData.of("F-1", "로그인 후 이용해주세요.");
-
-        Member member = memberService.findById(loginedMemberId);
-
-        return RsData.of("S-1", "당신의 username(은)는 %s 입니다.".formatted(member.getUsername()));
+        return 0;
     }
 }
